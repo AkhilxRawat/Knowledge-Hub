@@ -1,76 +1,305 @@
-# Knowledge Hub
+# 📚 Knowledge Hub
 
-Personal library to save, tag, search resources. One command to run everything.
+> A full-stack personal knowledge management system to save, organize, tag, and search your favorite resources — articles, videos, links, and more.
 
-## Structure
+---
+
+## 📌 Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Database Schema](#database-schema)
+- [API Reference](#api-reference)
+- [Setup & Installation](#setup--installation)
+- [Environment Variables](#environment-variables)
+- [Architecture](#how-it-works--architecture)
+- [Author](#author)
+
+---
+
+## Overview
+
+Knowledge Hub is a **full-stack web application** built as a personal resource library. Users can sign up, log in, and manage a private collection of resources — each with a title, URL, description, and custom tags. The app supports real-time search and tag-based filtering, making it easy to find anything you've saved.
+
+The project is structured as a **monorepo** — a single repository where both the backend (Node.js/Express) and frontend (Next.js) are managed together and started with a single command.
+
+---
+
+## Features
+
+### Authentication
+- 🔐 User registration (signup) and login
+- JWT-based authentication — token stored in `localStorage`
+- Protected routes — dashboard only accessible when logged in
+- Secure password hashing with `bcryptjs`
+
+### Resource Management
+- ➕ Add resources with title, URL, description, and tags
+- ✏️ Edit any saved resource inline via modal
+- 🗑️ Delete resources instantly
+- 🔍 Real-time search by title (debounced for performance)
+- 🏷️ Tag-based filtering — click any tag to filter the library
+- 📅 Resources sorted by newest first
+
+### UI / UX
+- Clean, minimal editorial design
+- Responsive layout — works on desktop and mobile
+- Loading states and error messages throughout
+- Empty states with call-to-action prompts
+
+---
+
+## Tech Stack
+
+### Backend
+| Technology | Purpose |
+|---|---|
+| **Node.js** | JavaScript runtime |
+| **Express.js** | REST API framework |
+| **MongoDB Atlas** | Cloud NoSQL database |
+| **Mongoose** | MongoDB ODM — schema modeling |
+| **JSON Web Tokens (JWT)** | Stateless authentication |
+| **bcryptjs** | Password hashing |
+| **dotenv** | Environment variable management |
+| **cors** | Cross-origin request handling |
+
+### Frontend
+| Technology | Purpose |
+|---|---|
+| **Next.js 14** | React framework (App Router) |
+| **TypeScript** | Type-safe JavaScript |
+| **React Context API** | Global auth state management |
+| **CSS (custom)** | Styling — no external UI library |
+
+### Developer Tools
+| Tool | Purpose |
+|---|---|
+| **concurrently** | Run API + frontend with one command |
+| **npm --prefix** | Cross-platform workspace management |
+
+---
+
+## Project Structure
 
 ```
-knowledge-hub/          ← root (Express API lives here)
-├── .env                ← MongoDB URI + JWT secret (edit this)
-├── package.json        ← ONE npm run dev starts everything
-├── src/
-│   ├── index.js        ← Express entry point
-│   ├── models/         ← Mongoose schemas (User, Resource)
-│   ├── routes/         ← auth.js, resources.js
-│   └── middleware/     ← auth.js (JWT verify)
-└── frontend/           ← Next.js app
+knowledge-hub/
+│
+├── .env                        # Environment variables (MongoDB URI, JWT secret)
+├── package.json                # Root — scripts to run both servers
+│
+├── src/                        # Express backend
+│   ├── index.js                # App entry point, DB connection, server start
+│   ├── models/
+│   │   ├── User.js             # Mongoose User schema
+│   │   └── Resource.js         # Mongoose Resource schema
+│   ├── routes/
+│   │   ├── auth.js             # POST /api/auth/signup, /api/auth/login
+│   │   └── resources.js        # CRUD routes for /api/resources
+│   └── middleware/
+│       └── auth.js             # JWT verification middleware
+│
+└── frontend/                   # Next.js frontend
+    ├── next.config.js          # Proxies /api/* → Express on port 4000
     ├── package.json
-    ├── next.config.js  ← proxies /api/* → localhost:4000
     └── src/
-        ├── app/        ← layout, globals.css, page.tsx, dashboard/
-        ├── components/ ← ResourceCard, ResourceModal
-        ├── lib/        ← api.ts, auth-context.tsx
-        └── types/      ← index.ts
+        ├── app/
+        │   ├── layout.tsx      # Root layout, font setup, AuthProvider
+        │   ├── globals.css     # Global styles and design tokens
+        │   ├── page.tsx        # Login / Signup page
+        │   └── dashboard/
+        │       └── page.tsx    # Main dashboard — search, filter, resource grid
+        ├── components/
+        │   ├── ResourceCard.tsx    # Individual resource display card
+        │   └── ResourceModal.tsx   # Add / Edit resource modal
+        ├── lib/
+        │   ├── api.ts              # All fetch calls to the backend
+        │   └── auth-context.tsx    # React context for auth state
+        └── types/
+            └── index.ts            # TypeScript interfaces
 ```
 
-## Setup (3 steps)
+---
 
-### 1. Edit `.env` — add your MongoDB password
+## Database Schema
+
+### Users Collection
+
+```js
+{
+  _id:        ObjectId,         // Auto-generated by MongoDB
+  name:       String,           // Required — display name
+  email:      String,           // Required, unique — used for login
+  password:   String,           // Bcrypt hashed — never stored as plain text
+  createdAt:  Date,             // Auto-managed by Mongoose timestamps
+  updatedAt:  Date
+}
+```
+
+### Resources Collection
+
+```js
+{
+  _id:         ObjectId,        // Auto-generated by MongoDB
+  user:        ObjectId,        // Reference to Users._id (ownership)
+  title:       String,          // Required — resource name
+  url:         String,          // Optional — link to the resource
+  description: String,          // Optional — personal note
+  tags:        [String],        // Array of tag strings for filtering
+  createdAt:   Date,            // Auto-managed by Mongoose timestamps
+  updatedAt:   Date
+}
+```
+
+**Indexes:**
+- `user` field is indexed for fast per-user queries
+- `title` has a text index to support search
+
+---
+
+## API Reference
+
+All resource endpoints require the `Authorization: Bearer <token>` header.
+
+### Auth
+
+| Method | Endpoint | Body | Description |
+|---|---|---|---|
+| `POST` | `/api/auth/signup` | `{ name, email, password }` | Register a new user |
+| `POST` | `/api/auth/login` | `{ email, password }` | Login, returns JWT token |
+
+**Response (both):**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1...",
+  "user": { "id": "...", "name": "Ada", "email": "ada@example.com" }
+}
+```
+
+### Resources
+
+| Method | Endpoint | Query Params | Description |
+|---|---|---|---|
+| `GET` | `/api/resources` | `?search=react&tags=engineering` | Get all resources (with optional filters) |
+| `POST` | `/api/resources` | — | Create a new resource |
+| `PUT` | `/api/resources/:id` | — | Update an existing resource |
+| `DELETE` | `/api/resources/:id` | — | Delete a resource |
+| `GET` | `/api/health` | — | Health check — confirms DB connection |
+
+**Resource body (POST / PUT):**
+```json
+{
+  "title": "How React Works",
+  "url": "https://react.dev",
+  "description": "Official React documentation",
+  "tags": ["react", "engineering"]
+}
+```
+
+---
+
+## Setup & Installation
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) v18 or higher
+- [npm](https://www.npmjs.com/) v7 or higher
+- A [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) account (free tier works)
+
+### Step 1 — Enter the project folder
+
+```bash
+cd knowledge-hub
+```
+
+### Step 2 — Configure environment variables
+
+Open `.env` in the root folder and replace `<db_password>` with your actual MongoDB Atlas password:
 
 ```env
-MONGO_URI=mongodb+srv://akhilmern7:YOUR_PASSWORD@cluster0.3dlpip5.mongodb.net/knowledge-hub?retryWrites=true&w=majority
+MONGO_URI=mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/knowledge-hub?retryWrites=true&w=majority
 JWT_SECRET=supersecret-change-me-in-production
 PORT=4000
 ```
 
-### 2. Install dependencies
+> **MongoDB Atlas:** Go to Network Access → Add IP Address → Allow from Anywhere (0.0.0.0/0)
+
+### Step 3 — Install all dependencies
 
 ```bash
 npm run install:all
 ```
 
-### 3. Run
+This installs backend packages (Express, Mongoose, etc.) at the root **and** frontend packages (Next.js, React, etc.) inside `frontend/` — in one command.
+
+### Step 4 — Start the application
 
 ```bash
 npm run dev
 ```
 
-Open http://localhost:3000
+Both servers start together in one terminal:
 
-You will see in the terminal:
 ```
 [API] ✅  MongoDB connected
 [API] ✅  API running → http://localhost:4000
-[WEB] ▲ Next.js ready on http://localhost:3000
+[WEB] ▲  Next.js ready on http://localhost:3000
 ```
 
-## MongoDB Atlas — allow your IP
+Open **http://localhost:3000** in your browser.
 
-Atlas → Network Access → Add IP → Allow from Anywhere (0.0.0.0/0)
+---
 
-## API
+## Environment Variables
 
-| Method | Endpoint              | Auth? | Description           |
-|--------|-----------------------|-------|-----------------------|
-| POST   | /api/auth/signup      | No    | Register              |
-| POST   | /api/auth/login       | No    | Login → JWT           |
-| GET    | /api/resources        | Yes   | List (search, tags)   |
-| POST   | /api/resources        | Yes   | Create                |
-| PUT    | /api/resources/:id    | Yes   | Update                |
-| DELETE | /api/resources/:id    | Yes   | Delete                |
-| GET    | /api/health           | No    | DB health check       |
+| Variable | Required | Description |
+|---|---|---|
+| `MONGO_URI` | ✅ Yes | MongoDB Atlas connection string |
+| `JWT_SECRET` | ✅ Yes | Secret key for signing JWT tokens |
+| `PORT` | ❌ No | API server port (defaults to `4000`) |
 
-## MongoDB Collections
+---
 
-**users** — name, email, password (bcrypt), createdAt, updatedAt  
-**resources** — user (ObjectId), title, url, description, tags[], createdAt, updatedAt
+## How It Works — Architecture
+
+```
+Browser (localhost:3000)
+        │
+        │  All requests go to port 3000
+        ▼
+  Next.js Dev Server
+        │
+        │  /api/* → proxied by next.config.js rewrites
+        ▼
+  Express API (localhost:4000)
+        │
+        │  Mongoose ODM
+        ▼
+  MongoDB Atlas (Cloud)
+```
+
+The Next.js `next.config.js` rewrites all `/api/*` requests to the Express server automatically. This means the browser only ever talks to one port (`3000`) and no API URL is ever hardcoded in the frontend — making it easy to deploy.
+
+### Request Flow Example — Adding a Resource
+
+```
+User fills form → ResourceModal.tsx
+  → api.ts: POST /api/resources  (with JWT header)
+    → Next.js rewrites to Express :4000
+      → auth middleware verifies JWT
+        → resources.js route creates document
+          → MongoDB Atlas stores it
+            → response flows back to update the UI
+```
+
+---
+
+## Author
+
+**Akhil**  
+Full Stack Developer — MERN Stack  
+
+---
+
+*Built as a full-stack project submission demonstrating REST API design, JWT authentication, MongoDB schema modeling, and a production-grade Next.js frontend in a monorepo architecture.*
