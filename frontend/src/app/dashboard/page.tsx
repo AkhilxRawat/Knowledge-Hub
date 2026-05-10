@@ -45,7 +45,7 @@ export default function Dashboard() {
     await load(search, activeTag);
   };
 
-  const allTags = [...new Set(resources.flatMap(r => r.tags))];
+ const allTags = Array.from(new Set(resources.flatMap(r => r.tags)));
   if (authLoading) return null;
 
   return (
